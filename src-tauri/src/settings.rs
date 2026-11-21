@@ -52,13 +52,54 @@ struct StoragePaths {
 static STORAGE_PATHS: OnceLock<StoragePaths> = OnceLock::new();
 
 fn fallback_config_dir() -> PathBuf {
-    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    base.join("Inkleaf")
+    #[cfg(target_os = "windows")]
+    {
+        let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        return base.join("Inkleaf");
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        return home.join("Library").join("Application Support").join("Inkleaf");
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+            return PathBuf::from(xdg).join("Inkleaf");
+        }
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        home.join(".config").join("Inkleaf")
+    }
 }
 
 fn fallback_data_dir() -> PathBuf {
-    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    base.join("Inkleaf")
+    #[cfg(target_os = "windows")]
+    {
+        let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        return base.join("Inkleaf");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        fallback_config_dir()
+    }
+}
+
+/// 若二进制位于 macOS `.app/Contents/MacOS` 包内，返回对应的 `.app` 路径，以免写入破坏代码签名。
+fn macos_app_bundle_dir(exe_dir: &Path) -> Option<PathBuf> {
+    if exe_dir.file_name().and_then(|n| n.to_str()) != Some("MacOS") {
+        return None;
+    }
+    let contents = exe_dir.parent()?;
+    if contents.file_name().and_then(|n| n.to_str()) != Some("Contents") {
+        return None;
+    }
+    let app_bundle = contents.parent()?;
+    let is_app = app_bundle
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("app"))
+        .unwrap_or(false);
+    is_app.then(|| app_bundle.to_path_buf())
 }
 
 /// 判断目录是否为 Cargo 编译构建产物目录，避免开发运行或单元测试污染构建缓存。
@@ -97,6 +138,24 @@ fn can_write_in_dir(dir: &Path) -> bool {
 
 fn resolve_storage_for_exe_dir(exe_dir: Option<&Path>) -> StoragePaths {
     if let Some(dir) = exe_dir {
+        if let Some(app_bundle) = macos_app_bundle_dir(dir) {
+            if let Some(bundle_parent) = app_bundle.parent() {
+                let not_applications = bundle_parent != Path::new("/Applications")
+                    && !bundle_parent.to_string_lossy().ends_with("/Applications");
+                if not_applications && bundle_parent.join("settings.json").exists() && can_write_in_dir(bundle_parent) {
+                    return StoragePaths {
+                        portable: true,
+                        settings_file: bundle_parent.join("settings.json"),
+                        data_dir: bundle_parent.join("data"),
+                    };
+                }
+            }
+            return StoragePaths {
+                portable: false,
+                settings_file: fallback_config_dir().join("settings.json"),
+                data_dir: fallback_data_dir(),
+            };
+        }
         if !is_cargo_target_dir(dir) && can_write_in_dir(dir) {
             return StoragePaths {
                 portable: true,
@@ -289,6 +348,27 @@ mod tests {
         let paths = resolve_storage_for_exe_dir(Some(&release_dir));
         assert!(!paths.portable);
         assert_ne!(paths.settings_file, release_dir.join("settings.json"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn never_writes_inside_macos_app_bundle() {
+        let dir = std::env::temp_dir().join(format!("inkleaf-macapp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let macos_exe_dir = dir.join("Inkleaf.app").join("Contents").join("MacOS");
+        std::fs::create_dir_all(&macos_exe_dir).unwrap();
+
+        let paths = resolve_storage_for_exe_dir(Some(&macos_exe_dir));
+        assert!(!paths.portable);
+        assert!(!paths.settings_file.starts_with(dir.join("Inkleaf.app")));
+
+        // 若 .app 旁已有用户显式放置的 settings.json，允许复用同级目录
+        std::fs::write(dir.join("settings.json"), "{}").unwrap();
+        let portable_paths = resolve_storage_for_exe_dir(Some(&macos_exe_dir));
+        assert!(portable_paths.portable);
+        assert_eq!(portable_paths.settings_file, dir.join("settings.json"));
+        assert_eq!(portable_paths.data_dir, dir.join("data"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }

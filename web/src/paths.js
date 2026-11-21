@@ -8,6 +8,8 @@ export const isUncPath = (p) => /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/.test(String(
 
 export const isWinAbs = (p) => isWinDriveAbs(p) || isUncPath(p);
 
+export const isPosixAbs = (p) => /^\/(?!\/)/.test(String(p || ''));
+
 export const isExternalUrl = (u) => /^(https?:|mailto:)/i.test(String(u || '').trim());
 
 export const isRemoteMediaUrl = (u) => /^https?:/i.test(String(u || '').trim());
@@ -76,8 +78,22 @@ function normalizeWinPath(raw) {
   return parts.join('\\');
 }
 
+function normalizePosixPath(raw) {
+  const slash = String(raw || '').replace(/\\/g, '/');
+  const parts = [];
+  for (const seg of slash.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      if (parts.length > 0) parts.pop();
+    } else {
+      parts.push(seg);
+    }
+  }
+  return '/' + parts.join('/');
+}
+
 /**
- * Resolves a document-relative or Windows-absolute path against baseDir.
+ * Resolves a document-relative, POSIX-absolute or Windows-absolute path against baseDir.
  * Rejects file:, http:, https:, mailto:, javascript:, vbscript:, data: and blob: URLs.
  */
 export function resolvePath(rel, baseDir) {
@@ -87,11 +103,26 @@ export function resolvePath(rel, baseDir) {
     return null;
   }
 
-  const decoded = safeDecodeURIComponent(trimmed).replace(/\//g, '\\');
+  const rawDecoded = safeDecodeURIComponent(trimmed);
+  if (baseDir && isPosixAbs(baseDir)) {
+    if (isWinAbs(rawDecoded)) {
+      return normalizeWinPath(rawDecoded.replace(/\//g, '\\'));
+    }
+    const slashDecoded = rawDecoded.replace(/\\/g, '/');
+    if (slashDecoded.startsWith('/')) {
+      return normalizePosixPath(slashDecoded);
+    }
+    const base = String(baseDir).replace(/\/+$/, '');
+    return normalizePosixPath(`${base}/${slashDecoded}`);
+  }
+
+  const decoded = rawDecoded.replace(/\//g, '\\');
   if (isWinAbs(decoded)) {
     return normalizeWinPath(decoded);
   }
-  if (!baseDir) return null;
+  if (!baseDir) {
+    return isPosixAbs(rawDecoded) ? normalizePosixPath(rawDecoded) : null;
+  }
 
   const base = String(baseDir).replace(/\//g, '\\').replace(/\\+$/, '');
   let combined;
@@ -118,7 +149,11 @@ export function resolveMediaPath(src, baseDir) {
 }
 
 export function assetUrl(absPath) {
-  return 'http://inkleaf-asset.localhost/' + encodeURIComponent(absPath);
+  if (typeof window !== 'undefined' && typeof window.__TAURI_INTERNALS__?.convertFileSrc === 'function') {
+    return window.__TAURI_INTERNALS__.convertFileSrc(absPath, 'inkleaf-asset');
+  }
+  const prefix = isPosixAbs(absPath) ? 'inkleaf-asset://localhost/' : 'http://inkleaf-asset.localhost/';
+  return prefix + encodeURIComponent(absPath);
 }
 
 export function fileDirName(dir) {

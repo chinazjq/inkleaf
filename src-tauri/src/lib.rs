@@ -28,6 +28,7 @@ struct WinDoc {
     last_hash: u64,
     dirty: bool,
     has_doc: bool,
+    booted: bool,
     close_ok: bool,
     asking_close: bool,
     pending_open: Option<PathBuf>,
@@ -272,13 +273,36 @@ fn focus(app: &AppHandle, label: &str) {
     }
 }
 
-/// Opens a file the way a double-click does: focus the window that already shows it, or open a new window.
+/// Opens a file the way a double-click does: focus the window that already shows it, reuse an empty welcome window, or open a new window.
 fn open_from_shell(app: &AppHandle, path: Option<PathBuf>) {
     if let Some(p) = &path {
         let p = absolute(p);
         if let Some(label) = window_for_path(app, &p) {
             focus(app, &label);
             return;
+        }
+        // 若当前存在空闲的欢迎页窗口，则直接复用该窗口展示新打开的文档
+        let empty_win = {
+            let state = app.state::<AppState>();
+            let docs = state.docs.lock().unwrap();
+            docs.iter()
+                .find(|(_, d)| !d.has_doc && !d.dirty && d.pending_open.is_none())
+                .map(|(l, d)| (l.clone(), d.booted))
+        };
+        if let Some((empty_label, booted)) = empty_win {
+            if !booted {
+                let state = app.state::<AppState>();
+                if let Some(d) = state.docs.lock().unwrap().get_mut(&empty_label) {
+                    d.pending_open = Some(p);
+                }
+                focus(app, &empty_label);
+                return;
+            }
+            if let Ok(payload) = load_into_window(app, &empty_label, &p) {
+                let _ = app.emit_to(&empty_label, "doc-opened", payload);
+                focus(app, &empty_label);
+                return;
+            }
         }
         let _ = create_window(app, Some(p));
         return;
@@ -360,13 +384,16 @@ fn create_window(app: &AppHandle, path: Option<PathBuf>) -> tauri::Result<Webvie
     let mut b = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
         .title("Inkleaf")
         .min_inner_size(480.0, 360.0)
-        .data_directory(settings::data_dir().join("WebView2"))
         .background_color(bg)
         .theme(Some(if dark { Theme::Dark } else { Theme::Light }))
         .zoom_hotkeys_enabled(false)
         // The window only ever shows the app's own page; links are handled by the page and the host.
         .on_navigation(is_allowed_navigation)
         .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny);
+    #[cfg(target_os = "windows")]
+    {
+        b = b.data_directory(settings::data_dir().join("WebView2"));
+    }
     match geom {
         Some(g) if g.width >= 480.0 && g.height >= 360.0 => {
             let offset = (open_windows as f64) * 28.0;
@@ -501,7 +528,10 @@ fn ask_unsaved_blocking(app: &AppHandle, label: &str) -> &'static str {
 fn boot(window: WebviewWindow) -> Boot {
     let app = window.app_handle().clone();
     let state = app.state::<AppState>();
-    let pending = state.docs.lock().unwrap().get_mut(window.label()).and_then(|d| d.pending_open.take());
+    let pending = state.docs.lock().unwrap().get_mut(window.label()).and_then(|d| {
+        d.booted = true;
+        d.pending_open.take()
+    });
     let (doc, error) = match pending {
         Some(p) => match load_into_window(&app, window.label(), &p) {
             Ok(d) => (Some(d), None),
@@ -784,8 +814,42 @@ fn open_external(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_default_apps(app: AppHandle) -> Result<(), String> {
-    app.opener().open_url("ms-settings:defaultapps", None::<&str>).map_err(|e| e.to_string())
+fn open_default_apps(window: WebviewWindow) -> Result<(), String> {
+    let app = window.app_handle();
+    let _ = &window;
+    #[cfg(target_os = "windows")]
+    {
+        return app.opener().open_url("ms-settings:defaultapps", None::<&str>).map_err(|e| e.to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let doc_path = app
+            .state::<AppState>()
+            .docs
+            .lock()
+            .unwrap()
+            .get(window.label())
+            .and_then(|d| d.path.clone());
+        if let Some(p) = doc_path {
+            return app.opener().reveal_item_in_dir(p).map_err(|e| e.to_string());
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            let app_bundle = exe
+                .parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .filter(|p| p.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("app")).unwrap_or(false))
+                .map(Path::to_path_buf);
+            let target = app_bundle.unwrap_or(exe);
+            return app.opener().reveal_item_in_dir(target).map_err(|e| e.to_string());
+        }
+        return Ok(());
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        let _ = app;
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -957,8 +1021,28 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Inkleaf");
+        .build(tauri::generate_context!())
+        .expect("error while building Inkleaf")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            match event {
+                tauri::RunEvent::Opened { urls } => {
+                    for url in urls {
+                        if let Ok(path) = url.to_file_path() {
+                            open_from_shell(app, Some(path));
+                        }
+                    }
+                }
+                tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+                    if !has_visible_windows && app.webview_windows().is_empty() {
+                        let _ = create_window(app, None);
+                    }
+                }
+                _ => {}
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]
@@ -976,6 +1060,7 @@ mod tests {
         assert!(!is_safe_external("https://example.com/\nfoo"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn command_line_files() {
         let cwd = Path::new(r"C:\work");
@@ -983,8 +1068,17 @@ mod tests {
         assert_eq!(file_args(&args, cwd), vec![PathBuf::from(r"C:\work\notes.md"), PathBuf::from(r"D:\a.md")]);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn unix_command_line_files() {
+        let cwd = Path::new("/work");
+        let args = vec!["inkleaf".to_string(), "notes.md".into(), "/docs/a.md".into(), "--flag".into()];
+        assert_eq!(file_args(&args, cwd), vec![PathBuf::from("/work/notes.md"), PathBuf::from("/docs/a.md")]);
+    }
+
     #[test]
     fn navigation_locked_to_index() {
+        assert!(is_allowed_navigation(&Url::parse("tauri://localhost/").unwrap()));
         assert!(is_allowed_navigation(&Url::parse("tauri://localhost/index.html").unwrap()));
         assert!(is_allowed_navigation(&Url::parse("http://tauri.localhost/").unwrap()));
         assert!(is_allowed_navigation(&Url::parse("http://tauri.localhost/index.html").unwrap()));

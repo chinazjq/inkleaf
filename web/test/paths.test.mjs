@@ -5,6 +5,7 @@ import {
   assetUrl,
   isExternalUrl,
   isFileUrl,
+  isPosixAbs,
   resolveMediaPath,
   resolvePath,
   safeDecodeURIComponent,
@@ -68,4 +69,29 @@ test('DOC_EXT_RE includes mdx and rejects executables', () => {
   for (const bad of ['a.bat', 'b.exe', 'c.ps1', 'd.png', 'e.html']) {
     assert.equal(DOC_EXT_RE.test(bad), false, bad);
   }
+});
+
+test('resolvePath and assetUrl support macOS POSIX paths', () => {
+  assert.equal(isPosixAbs('/Users/alice/docs'), true);
+  assert.equal(isPosixAbs('//server/share'), false);
+  assert.equal(
+    resolvePath('../assets/图%20%231.png', '/Users/alice/Documents/notes'),
+    '/Users/alice/Documents/assets/图 #1.png',
+  );
+  assert.equal(
+    resolvePath('../../../../../../etc/passwd', '/Users/alice'),
+    '/etc/passwd',
+  );
+  assert.equal(
+    resolvePath('/Users/alice/shared/cover.png', '/Users/alice/Documents/notes'),
+    '/Users/alice/shared/cover.png',
+  );
+  assert.equal(
+    resolvePath('/Users/alice/docs/readme.md', null),
+    '/Users/alice/docs/readme.md',
+  );
+  assert.equal(
+    assetUrl('/Users/alice/docs/图 #1.png'),
+    'inkleaf-asset://localhost/%2FUsers%2Falice%2Fdocs%2F%E5%9B%BE%20%231.png',
+  );
 });

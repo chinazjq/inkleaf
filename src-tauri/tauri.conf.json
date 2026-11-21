@@ -17,8 +17,8 @@
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "font-src": "'self' data:",
-        "img-src": "'self' data: blob: http://inkleaf-asset.localhost https: http:",
-        "media-src": "'self' blob: http://inkleaf-asset.localhost https: http:",
+        "img-src": "'self' data: blob: inkleaf-asset: http://inkleaf-asset.localhost https: http:",
+        "media-src": "'self' blob: inkleaf-asset: http://inkleaf-asset.localhost https: http:",
         "connect-src": "'self' ipc: http://ipc.localhost",
         "object-src": "'none'",
         "frame-src": "'none'",
@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "app"],
     "publisher": "Inkleaf contributors",
     "copyright": "© 2026 Inkleaf contributors. MIT License.",
     "category": "Productivity",
@@ -38,7 +38,13 @@
     "longDescription": "Inkleaf (墨页) is a calm, fast Markdown reader with a source editor and live preview.",
     "license": "MIT",
     "licenseFile": "../LICENSE",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
     "resources": { "../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md" },
     "fileAssociations": [
       {
@@ -49,6 +55,9 @@
         "mimeType": "text/markdown"
       }
     ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
       "nsis": {

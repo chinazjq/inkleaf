@@ -5,21 +5,21 @@
 <h1 align="center">Inkleaf (墨页)</h1>
 
 <p align="center">
-  <strong>A calm, self-contained, and security-hardened local Markdown reader and editor for Windows.</strong><br>
-  Built with <strong>Tauri v2 (Rust)</strong> and the native <strong>WebView2</strong> runtime.
+  <strong>A calm, self-contained, and security-hardened local Markdown reader and editor.</strong><br>
+  Built with <strong>Tauri v2 (Rust)</strong> and native <strong>WebView2 / WKWebView</strong> for <strong>Windows</strong> and <strong>macOS</strong>.
 </p>
 
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="#screenshots">Screenshots</a> ·
-  <a href="#installation-windows">Installation</a> ·
+  <a href="#installation">Installation</a> ·
   <a href="#shortcuts">Shortcuts</a> ·
   <a href="#development--build">Build from Source</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20(x64%20%7C%20arm64)-1d5fbf?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/Stack-Tauri%20v2%20%C2%B7%20Rust%20%C2%B7%20WebView2-141414?style=flat-square" alt="Tech Stack">
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11%20%7C%20macOS%2011%2B%20(Universal)-1d5fbf?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Stack-Tauri%20v2%20%C2%B7%20Rust%20%C2%B7%20WebView2%20%2F%20WKWebView-141414?style=flat-square" alt="Tech Stack">
   <img src="https://img.shields.io/badge/License-MIT-2e6b33?style=flat-square" alt="MIT License">
 </p>
 
@@ -71,11 +71,20 @@ Many Markdown tools feel either heavy to launch or cluttered like a web browser.
 
 ---
 
-## Installation (Windows)
+## Installation
 
 Inkleaf ships ready-to-run release packages—**no manual runtime setup required**:
 
-### Installer (Recommended — Auto Dependency Setup)
+### macOS One-Click Installer (Apple Silicon & Intel Universal)
+
+1. Download `Inkleaf_<version>_macos_universal.dmg` from [Releases](../../releases) or the local `release/` folder (single universal binary natively supporting both Apple Silicon and Intel Macs on macOS 11.0+).
+2. Open the `.dmg` image and install using either method:
+   - **One-Click Script (Recommended)**: Double-click **`一键安装 Inkleaf (Install).command`**. It copies `Inkleaf.app` to `/Applications` (falling back to `~/Applications` if permission is declined), clears the Gatekeeper quarantine attribute (`xattr -cr`), refreshes `.md` file associations, and launches Inkleaf automatically.
+   - **Drag & Drop**: Drag `Inkleaf.app` into the `Applications` alias inside the DMG (for unsigned community builds, right-click → *Open* on first launch, or run `xattr -cr /Applications/Inkleaf.app`).
+
+### Windows Installer & Portable
+
+#### Installer (Recommended — Auto Dependency Setup)
 
 1. Download `Inkleaf_<version>_x64-setup.exe` (or `arm64-setup.exe`) from [Releases](../../releases) or the local `release/` folder.
 2. Run the executable and **simply choose your installation folder** (per-user NSIS install, no administrator privileges required).
@@ -86,7 +95,7 @@ Inkleaf ships ready-to-run release packages—**no manual runtime setup required
    - Post-install creates a `data\` runtime directory and `settings.json` directly inside your chosen installation directory (if a preset `settings.json` sits next to the setup executable, it is copied automatically).
    - Registers `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, and `.mdx` file associations and cleanly removes them along with co-located data on uninstall.
 
-### Portable Package
+#### Portable Package
 
 1. Extract `Inkleaf_<version>_x64-portable.zip` to any writable directory (contains `inkleaf.exe`, a default `settings.json`, and `THIRD_PARTY_LICENSES.md`).
 2. Launch `inkleaf.exe` directly. Both `settings.json` and `data\WebView2\` live alongside the executable without cluttering `AppData`.
@@ -101,7 +110,7 @@ Inkleaf ships ready-to-run release packages—**no manual runtime setup required
 Inkleaf treats every opened Markdown document as untrusted input:
 
 - **Scoped Local Media (`inkleaf-asset://`)**: Only allow-listed media extensions inside the active document's folder tree (up to two ancestor folders by default, unless *Local images: Anywhere* is explicitly enabled) are served after path canonicalization, with `X-Content-Type-Options: nosniff` and restrictive response CSP headers.
-- **Safe Link Handling**: External links are restricted to `http:`, `https:`, and `mailto:`; `file://`, `javascript:`, and `vbscript:` links are blocked; non-document local files are **never executed**—they display a native confirmation prompt with the full path and reveal the item in File Explorer.
+- **Safe Link Handling**: External links are restricted to `http:`, `https:`, and `mailto:`; `file://`, `javascript:`, and `vbscript:` links are blocked; non-document local files are **never executed**—they display a native confirmation prompt with the full path and reveal the item in File Explorer or Finder.
 - **DOMPurify & Sandboxed Rendering**: Forbids `<style>`, raw `<svg>`, and `data-*` attributes in document HTML; prefixes document `id`/`name` attributes with `doc-`; caches shell DOM refs and ignores `[data-act]` inside the document container; isolates KaTeX slots; runs Mermaid with `securityLevel: 'strict'`, size/edge limits, blocked `themeCSS` directives, and secondary SVG/CSS sanitization.
 - **Strict CSP & Remote Privacy**: Disables inline scripts, locks navigation to `index.html`, and blocks remote `http`/`https` images by default until opted in per document or globally.
 
@@ -109,17 +118,17 @@ Inkleaf treats every opened Markdown document as untrusted input:
 
 ## Shortcuts
 
-| Action | Shortcut |
-| --- | --- |
-| Open file | `Ctrl+O` |
-| New document | `Ctrl+N` |
-| Toggle reading / edit mode | `Ctrl+E` |
-| Save / Save As | `Ctrl+S` / `Ctrl+Shift+S` |
-| Find in document / source | `Ctrl+F` (`Enter` / `Shift+Enter` / `F3`) |
-| Toggle sidebar | `Ctrl+\` |
-| Adjust / reset font size | `Ctrl++` / `Ctrl+-` / `Ctrl+Wheel` / `Ctrl+0` |
-| Toggle dark / light theme | `Ctrl+Shift+L` |
-| Print or export PDF | `Ctrl+P` |
+| Action | Windows | macOS |
+| --- | --- | --- |
+| Open file | `Ctrl+O` | `⌘O` |
+| New document | `Ctrl+N` | `⌘N` |
+| Toggle reading / edit mode | `Ctrl+E` | `⌘E` |
+| Save / Save As | `Ctrl+S` / `Ctrl+Shift+S` | `⌘S` / `⌘⇧S` |
+| Find in document / source | `Ctrl+F` (`Enter` / `Shift+Enter` / `F3`) | `⌘F` (`Enter` / `⇧Enter` / `F3`) |
+| Toggle sidebar | `Ctrl+\` | `⌘\` |
+| Adjust / reset font size | `Ctrl++` / `Ctrl+-` / `Ctrl+Wheel` / `Ctrl+0` | `⌘+` / `⌘-` / `⌘+Scroll` / `⌘0` |
+| Toggle dark / light theme | `Ctrl+Shift+L` | `⌘⇧L` |
+| Print or export PDF | `Ctrl+P` | `⌘P` |
 
 ---
 
@@ -127,9 +136,9 @@ Inkleaf treats every opened Markdown document as untrusted input:
 
 ### Prerequisites
 
-- **Windows 10 / 11** (x64 or ARM64) with Microsoft Edge WebView2 Runtime
-- **Node.js** `>= 22.12.0`
-- **Rust** `>= 1.80` (MSVC toolchain, e.g. `stable-x86_64-pc-windows-msvc`) + Visual Studio Build Tools (C++ linker)
+- **OS**: Windows 10 / 11 (x64 or ARM64 with WebView2 Runtime) or macOS 11+ (with Xcode Command Line Tools)
+- **Node.js**: `>= 22.12.0`
+- **Rust**: `>= 1.80` (MSVC toolchain on Windows; `aarch64-apple-darwin` & `x86_64-apple-darwin` on macOS)
 
 ### Development & Tests
 
@@ -147,36 +156,40 @@ npm test
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-### One-Command Release Packaging
-
-Build all assets, run every test suite, compile the Tauri binary + NSIS installer, and output ready-to-distribute files (`*-setup.exe`, `*-portable.zip`, `SHA256SUMS.txt`) into `release/`:
+### Release Packaging
 
 ```powershell
+# Windows: outputs setup.exe, portable.zip, and SHA256SUMS.txt into release/
 npm run release
+
+# macOS (run on macOS): builds universal .dmg installer
+npx tauri build --target universal-apple-darwin --bundles app
+bash scripts/package-macos-dmg.sh
 ```
 
 ### Repository Layout
 
 ```text
-├── assets/                 # Source SVG and 1024px application icon
-├── docs/screenshots/       # Product screenshots for documentation
-├── scripts/                # Third-party license generator & release packager
-├── src-tauri/              # Rust / Tauri v2 desktop host
-│   ├── nsis/hooks.nsh      # NSIS install/uninstall hooks (co-located config & offline runtime)
-│   ├── src/                # Host modules (docs / assets / settings / i18n / lib)
-│   └── tauri.conf.json     # Window, CSP, and bundler configuration
-└── web/                    # Frontend reader, CodeMirror 6 editor & unit tests
-    ├── src/                # App shell, styles, Markdown pipeline, sanitizer & editor
-    └── test/               # Node test-runner unit tests
+├── assets/                   # Source SVG and 1024px application icon
+├── docs/screenshots/         # Product screenshots for documentation
+├── scripts/                  # License generator, Windows release & macOS DMG packagers
+├── src-tauri/                # Rust / Tauri v2 desktop host
+│   ├── nsis/hooks.nsh        # Windows NSIS install/uninstall hooks (co-located config & runtime)
+│   ├── src/                  # Host modules (docs / assets / settings / i18n / lib)
+│   └── tauri.conf.json       # Window, CSP, and multi-platform bundler configuration
+└── web/                      # Frontend reader, CodeMirror 6 editor & unit tests
+    ├── src/                  # App shell, styles, Markdown pipeline, sanitizer & editor
+    └── test/                 # Node test-runner unit tests
 ```
 
 ---
 
 ## Roadmap
 
+- [x] Native macOS Universal (Apple Silicon & Intel) support
 - [ ] Single-pane WYSIWYG editing mode (Typora-style inline block rendering)
-- [ ] macOS and Linux desktop targets
-- [ ] Signed releases & winget / Scoop package manifests
+- [ ] Linux desktop targets
+- [ ] Code signing, macOS notarization, and winget / Homebrew manifests
 
 ---
 

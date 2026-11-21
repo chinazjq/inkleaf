@@ -25,12 +25,24 @@ pub fn t(lang: &str, key: &str) -> &'static str {
         "open.title" => if zh { "打开 Markdown 文件" } else { "Open a Markdown file" },
         "save.title" => if zh { "保存 Markdown 文件" } else { "Save Markdown file" },
         "local.title" => if zh { "打开本地文件？" } else { "Open a local file?" },
-        "local.body" => if zh {
+        "local.body" => if cfg!(target_os = "macos") {
+            if zh {
+                "这份文档链接到一个本地文件。为了安全，Inkleaf 不会直接运行它，只会在访达里选中它：\n\n"
+            } else {
+                "This document links to a local file. For safety, Inkleaf will not run it; it can only show it in Finder:\n\n"
+            }
+        } else if zh {
             "这份文档链接到一个本地文件。为了安全，Inkleaf 不会直接运行它，只会在资源管理器里选中它：\n\n"
         } else {
             "This document links to a local file. For safety, Inkleaf will not run it; it can only show it in File Explorer:\n\n"
         },
-        "local.show" => if zh { "在资源管理器中显示" } else { "Show in File Explorer" },
+        "local.show" => if cfg!(target_os = "macos") {
+            if zh { "在访达中显示" } else { "Show in Finder" }
+        } else if zh {
+            "在资源管理器中显示"
+        } else {
+            "Show in File Explorer"
+        },
         "cancel" => if zh { "取消" } else { "Cancel" },
         "unsaved.title" => if zh { "有未保存的修改" } else { "Unsaved changes" },
         "unsaved.body" => if zh { "要保存对这份文档的修改吗？" } else { "Do you want to save the changes to this document?" },

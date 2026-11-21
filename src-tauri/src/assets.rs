@@ -65,11 +65,11 @@ pub fn roots_for(doc: &Path) -> Vec<PathBuf> {
     let mut cur = doc.parent();
     for _ in 0..=ANCESTOR_LEVELS {
         match cur {
-            Some(dir) if dir.parent().is_some() => {
+            Some(dir) if dir.parent().is_some() && !matches!(dir.to_str(), Some("/Users" | "/home")) => {
                 roots.push(dir.to_path_buf());
                 cur = dir.parent();
             }
-            // Never widen to a drive root or a bare UNC share.
+            // Never widen to a drive root, a bare UNC share, or Unix /Users /home roots.
             _ => break,
         }
     }
@@ -114,12 +114,22 @@ mod tests {
         d
     }
 
+    #[cfg(windows)]
     #[test]
     fn url_paths_decode_special_characters() {
         let p = path_from_url_path("/C%3A%5Cdocs%5C%E5%9B%BE%20%231%25%3F.png").unwrap();
         assert_eq!(p, PathBuf::from(r"C:\docs\图 #1%?.png"));
         let unc = path_from_url_path("/%5C%5Cserver%5Cshare%5Ca.png").unwrap();
         assert_eq!(unc, PathBuf::from(r"\\server\share\a.png"));
+        assert!(path_from_url_path("/relative.png").is_none());
+        assert!(path_from_url_path("/%FF%FE").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_url_paths_decode_special_characters() {
+        let p = path_from_url_path("/%2FUsers%2Falice%2Fdocs%2F%E5%9B%BE%20%231%25%3F.png").unwrap();
+        assert_eq!(p, PathBuf::from("/Users/alice/docs/图 #1%?.png"));
         assert!(path_from_url_path("/relative.png").is_none());
         assert!(path_from_url_path("/%FF%FE").is_none());
     }
@@ -158,6 +168,7 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
     }
 
+    #[cfg(windows)]
     #[test]
     fn roots_stop_before_drive_root() {
         let roots = roots_for(Path::new(r"C:\a.md"));
@@ -166,12 +177,23 @@ mod tests {
         assert_eq!(roots, vec![PathBuf::from(r"C:\x")]);
     }
 
+    #[cfg(windows)]
     #[test]
     fn unc_roots_stop_before_share() {
         let roots = roots_for(Path::new(r"\\server\share\a.md"));
         assert!(roots.is_empty());
         let roots = roots_for(Path::new(r"\\server\share\notes\a.md"));
         assert_eq!(roots, vec![PathBuf::from(r"\\server\share\notes")]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_roots_stop_before_users_home() {
+        assert!(roots_for(Path::new("/a.md")).is_empty());
+        assert!(roots_for(Path::new("/Users/a.md")).is_empty());
+        assert!(roots_for(Path::new("/home/a.md")).is_empty());
+        let roots = roots_for(Path::new("/Users/alice/a.md"));
+        assert_eq!(roots, vec![PathBuf::from("/Users/alice")]);
     }
 
     #[test]

@@ -73,7 +73,12 @@ runStep('生成第三方开源许可证清单', process.execPath, [join(root, 's
 runStep('打包前端静态资源', process.execPath, [join(root, 'web', 'build.mjs')]);
 runStep('运行前端单元测试', 'npm', ['test'], { shell: isWin });
 runStep('运行 Rust 单元测试', 'cargo', ['test', '--manifest-path', 'src-tauri/Cargo.toml']);
-runStep('构建 Tauri 发布程序与 NSIS 一键安装器', 'npx', ['tauri', 'build'], { shell: isWin });
+runStep(
+  '构建 Tauri 发布程序与 NSIS 一键安装器',
+  'npx',
+  isWin ? ['tauri', 'build', '--bundles', 'nsis'] : ['tauri', 'build'],
+  { shell: isWin },
+);
 
 // 2. 整理 release/ 目录产物
 const targetRelease = join(root, 'src-tauri', 'target', 'release');

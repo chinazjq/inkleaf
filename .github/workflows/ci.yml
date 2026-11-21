@@ -42,4 +42,36 @@ jobs:
           cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri app (x64)
-        run: npm run build
+        run: npx tauri build --bundles nsis
+
+  verify-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-ci
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build web assets & run JS tests
+        run: |
+          npm run build:web
+          npm test
+
+      - name: Check Rust & run Cargo tests
+        run: |
+          cargo check --manifest-path src-tauri/Cargo.toml
+          cargo test --manifest-path src-tauri/Cargo.toml

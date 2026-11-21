@@ -194,6 +194,32 @@ function setPref(k, v) {
 
 /* ------------------------------------------------------------------ i18n */
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
+
+function formatMacShortcutText(s) {
+  return String(s || '')
+    .replace(/\bCtrl\+\s*/g, '⌘')
+    .replace(/\bCtrl\s+/g, '⌘')
+    .replace(/\bShift\+\s*/g, '⇧')
+    .replace(/\bShift\s+/g, '⇧');
+}
+
+function applyPlatformHints(lang) {
+  if (!isMac) return;
+  ui.crumb.title = t(lang, 'meta.reveal.mac');
+  for (const el of document.querySelectorAll('kbd')) {
+    el.textContent = formatMacShortcutText(el.textContent);
+  }
+  for (const el of document.querySelectorAll('[title*="Ctrl"]')) {
+    el.title = formatMacShortcutText(el.title);
+  }
+  for (const el of document.querySelectorAll('[aria-label*="Ctrl"]')) {
+    el.setAttribute('aria-label', formatMacShortcutText(el.getAttribute('aria-label')));
+  }
+  const lede = ui.welcome.querySelector('.lede');
+  if (lede) lede.textContent = formatMacShortcutText(lede.textContent);
+}
+
 function applyLanguage() {
   const lang = effectiveLang();
   applyStaticI18n(document, lang);
@@ -222,6 +248,7 @@ function applyLanguage() {
       }
     }
   }
+  applyPlatformHints(lang);
 }
 
 function escapeHtml(s) {
@@ -1409,20 +1436,21 @@ const isTyping = (e) => /input|textarea/i.test(e.target.tagName) || Boolean(e.ta
 
 document.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
+  const mod = e.ctrlKey || e.metaKey;
 
   // Disable browser accelerator keys that would reload or navigate away from the app page.
   if (
     e.key === 'F5' ||
     e.key === 'BrowserBack' ||
     e.key === 'BrowserForward' ||
-    (e.ctrlKey && !e.altKey && k === 'r') ||
-    (e.altKey && !e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))
+    (mod && !e.altKey && k === 'r') ||
+    (e.altKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))
   ) {
     e.preventDefault();
     return;
   }
 
-  if (e.ctrlKey && !e.altKey) {
+  if (mod && !e.altKey) {
     if (k === 'o') {
       e.preventDefault();
       actions.open();
@@ -1478,7 +1506,7 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener(
   'wheel',
   (e) => {
-    if (!e.ctrlKey) return;
+    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     fontStep(e.deltaY < 0 ? 1 : -1);
   },
@@ -1559,6 +1587,10 @@ async function init() {
   setTab(prefs.tab);
 
   if (isTauri) {
+    await listen('doc-opened', (ev) => {
+      if (ev.payload) applyLoadedDoc(ev.payload);
+    });
+
     await listen('doc-changed', (ev) => {
       const payload = ev.payload;
       if (!payload || payload.path !== state.path) return;

@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -50,7 +51,7 @@ jobs:
           cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri bundle (${{ matrix.target }})
-        run: npx tauri build --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }} --bundles nsis
 
       - name: Collect release artifacts
         shell: pwsh
@@ -88,10 +89,61 @@ jobs:
           name: inkleaf-${{ matrix.arch }}
           path: release-assets/
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-universal
+
+      - name: Install dependencies & build web
+        run: |
+          npm ci
+          npm run licenses
+          npm run build:web
+
+      - name: Run tests
+        run: |
+          npm test
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri universal macOS app
+        run: npx tauri build --target universal-apple-darwin --bundles app
+
+      - name: Package macOS universal DMG
+        run: bash scripts/package-macos-dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkleaf-macos-universal
+          path: release-assets/
+
   publish:
-    needs: build-windows
+    needs: [build-windows, build-macos]
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: meta
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = if ("${{ github.ref }}" -like "refs/tags/*") { "${{ github.ref_name }}" } else { "v$version" }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -108,5 +160,6 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
           files: artifacts/*
           generate_release_notes: true
