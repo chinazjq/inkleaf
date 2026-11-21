@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install dependencies & build web
+        run: |
+          npm ci
+          npm run licenses
+          npm run build:web
+
+      - name: Run tests
+        if: matrix.arch == 'x64'
+        run: |
+          npm test
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri bundle (${{ matrix.target }})
+        run: npx tauri build --target ${{ matrix.target }}
+
+      - name: Collect release artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          $targetDir = "src-tauri/target/${{ matrix.target }}/release"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $stageDir = "portable-stage-${{ matrix.arch }}"
+          $portableRoot = "$stageDir/Inkleaf"
+          New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
+          Copy-Item "$targetDir/inkleaf.exe" "$portableRoot/inkleaf.exe"
+          Copy-Item "THIRD_PARTY_LICENSES.md" "$portableRoot/THIRD_PARTY_LICENSES.md"
+          @'
+          {
+            "recent": [],
+            "window": null,
+            "dark": false,
+            "language": "auto",
+            "images_anywhere": false,
+            "remote_images": false
+          }
+          '@ | Set-Content -Encoding utf8 -Path "$portableRoot/settings.json"
+          $zipPath = "release-assets/Inkleaf_${version}_${{ matrix.arch }}-portable.zip"
+          Compress-Archive -Path $portableRoot -DestinationPath $zipPath -Force
+          Remove-Item -Recurse -Force $stageDir
+          Get-ChildItem "$targetDir/bundle/nsis/*.exe" | ForEach-Object {
+            Copy-Item $_.FullName "release-assets/$($_.Name)"
+          }
+          if ("${{ matrix.arch }}" -eq "x64") {
+            Copy-Item "THIRD_PARTY_LICENSES.md" "release-assets/THIRD_PARTY_LICENSES.md"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkleaf-${{ matrix.arch }}
+          path: release-assets/
+
+  publish:
+    needs: build-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          Set-Location artifacts
+          Get-ChildItem -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' } | Sort-Object Name | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+            "$h  $($_.Name)"
+          } | Out-File -Encoding utf8 -FilePath SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

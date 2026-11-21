@@ -1,0 +1,15 @@
+node_modules/
+web/dist/
+src-tauri/target/
+src-tauri/gen/
+target/
+dist/
+release/
+release-assets/
+*.user
+.taste-skill/
+.claude/
+.vs/
+*.tmp
+Thumbs.db
+.DS_Store

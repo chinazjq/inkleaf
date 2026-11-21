@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="224" fill="#141414"/>
+  <!-- Inkleaf mark: folded page / leaf silhouette with crisp spine vein -->
+  <path d="M 248 776 C 224 468 456 228 776 248 C 796 568 556 800 248 776 Z" fill="#ffffff"/>
+  <path d="M 232 792 L 584 440" stroke="#141414" stroke-width="56" stroke-linecap="round"/>
+  <path d="M 412 612 L 386 456" stroke="#141414" stroke-width="44" stroke-linecap="round"/>
+  <path d="M 480 544 L 636 570" stroke="#141414" stroke-width="44" stroke-linecap="round"/>
+</svg>

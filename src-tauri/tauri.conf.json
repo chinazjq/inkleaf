@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Inkleaf",
+  "version": "0.1.0",
+  "identifier": "app.inkleaf.reader",
+  "build": {
+    "frontendDist": "../web/dist",
+    "beforeBuildCommand": "npm run build:web",
+    "beforeDevCommand": "npm run build:web"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "img-src": "'self' data: blob: http://inkleaf-asset.localhost https: http:",
+        "media-src": "'self' blob: http://inkleaf-asset.localhost https: http:",
+        "connect-src": "'self' ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Inkleaf contributors",
+    "copyright": "© 2026 Inkleaf contributors. MIT License.",
+    "category": "Productivity",
+    "shortDescription": "A calm Markdown reader and editor",
+    "longDescription": "Inkleaf (墨页) is a calm, fast Markdown reader with a source editor and live preview.",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "resources": { "../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md" },
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown", "mkd", "mkdn", "mdx"],
+        "name": "Markdown",
+        "description": "Markdown document",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installerHooks": "nsis/hooks.nsh",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {}
+}
